@@ -1,10 +1,11 @@
 'use strict';
 
-angular.module['AngularSocket',[])
+angular.module('AngularSocket',[])
   .provider('AngularSocket', function() {
     this.$get = ['$rootScope', '$q', function($rootScope, $q) {
       function SocketFactory() {
         var socketFactory = this;
+        var socketList = {};
 
         function Socket(url) {
           var socket = this;
@@ -31,7 +32,17 @@ angular.module['AngularSocket',[])
             });
           }
 
-          var webSocket = new WebSocket(url, ['protocolOne', 'protocolTwo']);
+          var webSocket = new WebSocket(url);
+
+          var ready = false;
+          var waiting = [];
+
+          webSocket.onopen = function() {
+            waiting.forEach(function(fn) {
+              fn();
+            });
+            ready = true;
+          };
 
           webSocket.onmessage = function(event) {
             var data;
@@ -59,39 +70,47 @@ angular.module['AngularSocket',[])
           socket.emit = function(name, data) {
             var deferred = $q.defer();
 
-            var oldMessageHandler = webSocket.onmessage;
+            function send() {
+              var oldMessageHandler = webSocket.onmessage;
 
-            webSocket.onmessage = function(data) {
-              try {
-                data = JSON.parse(data.data);
-                deferred.resolve(data) ;
-              } catch (e) {
-                deferred.reject(data.data || e);
-              } finally {
-                webSocket.onmessage = oldMessageHandler;
-              }
-            };
+              webSocket.onmessage = function(data) {
+                try {
+                  data = JSON.parse(data.data);
+                  deferred.resolve(data) ;
+                } catch (e) {
+                  deferred.reject(data.data || e);
+                } finally {
+                  webSocket.onmessage = oldMessageHandler;
+                }
+              };
 
-            webSocket.send(JSON.stringify({name: name, data: data}));
+              webSocket.send(JSON.stringify({name: name, data: data}));
+            }
+
+            if(ready) {
+              send();
+            } else {
+              waiting.push(send);
+            }
 
             return deferred.promise;
           };
 
-          var socketList = {};
-
-          socketFactory.get = function(name, url) {
-            if(!name) {
-              throw 'You cannot get a socket with no name.';
-            } else if(socketList[name]) {
-              return socketList[name];
-            } else if (name && url) {
-              return socketList[name] = new Socket(url);
-            } else if (!url) {
-              throw 'No socket exists with name ' + name + '. Please provide a URL.';
-            }
-          };
 
         }
+
+        socketFactory.get = function(name, url) {
+          if(!name) {
+            throw 'You cannot get a socket with no name.';
+          } else if(socketList[name]) {
+            return socketList[name];
+          } else if (name && url) {
+            return socketList[name] = new Socket(url);
+          } else if (!url) {
+            throw 'No socket exists with name ' + name + '. Please provide a URL.';
+          }
+        };
+
       }
       return new SocketFactory();
     }];
