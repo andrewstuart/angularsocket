@@ -102,12 +102,12 @@ angular.module('AngularSocket',[])
         socketFactory.get = function(name, url) {
           if(!name) {
             throw 'You cannot get a socket with no name.';
+          } else if (!url) {
+            throw 'No socket exists with name ' + name + '. Please provide a URL.';
           } else if(socketList[name]) {
             return socketList[name];
           } else if (name && url) {
             return socketList[name] = new Socket(url);
-          } else if (!url) {
-            throw 'No socket exists with name ' + name + '. Please provide a URL.';
           }
         };
 
